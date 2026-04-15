@@ -17,6 +17,7 @@ SNOWFLAKE_ROLE      - Role to assume (optional)
 
 import os
 
+import pandas as pd
 import snowflake.connector
 from snowflake.connector import SnowflakeConnection
 
@@ -51,7 +52,7 @@ def get_snowflake_connection() -> SnowflakeConnection:
 
 
 def load_dataframe_to_snowflake(
-    df,
+    df: pd.DataFrame,
     table_name: str,
     conn: SnowflakeConnection | None = None,
     *,

@@ -31,6 +31,13 @@ def fetch_rss_feed(url: str = RSS_FEED_URL, timeout: int = 30) -> str:
     return response.text
 
 
+def _element_text(element: ET.Element | None) -> str | None:
+    """Return stripped text content of *element*, or ``None`` if absent."""
+    if element is None or not element.text:
+        return None
+    return element.text.strip()
+
+
 def parse_rss(xml_text: str) -> list[dict]:
     """Parse an RSS XML string into a list of article dictionaries.
 
@@ -47,17 +54,12 @@ def parse_rss(xml_text: str) -> list[dict]:
 
     articles = []
     for item in channel.findall("item"):
-        title_el = item.find("title")
-        link_el = item.find("link")
-        desc_el = item.find("description")
-        pub_date_el = item.find("pubDate")
-
         articles.append(
             {
-                "title": title_el.text.strip() if title_el is not None and title_el.text else None,
-                "link": link_el.text.strip() if link_el is not None and link_el.text else None,
-                "description": desc_el.text.strip() if desc_el is not None and desc_el.text else None,
-                "pub_date": pub_date_el.text.strip() if pub_date_el is not None and pub_date_el.text else None,
+                "title": _element_text(item.find("title")),
+                "link": _element_text(item.find("link")),
+                "description": _element_text(item.find("description")),
+                "pub_date": _element_text(item.find("pubDate")),
                 "source": "Hacker News RSS",
             }
         )
