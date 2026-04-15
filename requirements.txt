@@ -1,0 +1,5 @@
+snowflake-connector-python
+pandas
+prefect
+requests
+streamlit
