@@ -13,7 +13,10 @@ Run locally:
 """
 
 import pandas as pd
+from dotenv import load_dotenv
 from prefect import flow, get_run_logger, task
+
+load_dotenv()  # charge .env dans os.environ (sans écraser les vraies vars d'env)
 
 from db.snowflake_connector import get_snowflake_connection, load_dataframe_to_snowflake
 from ingestion.fetch_news import fetch_news_as_dataframe
