@@ -32,4 +32,4 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 # Point d'entrée : lancer le flow Prefect
-CMD ["python", "-m", "flows.news_pipeline_flow"]
+CMD ["python", "main.py"]

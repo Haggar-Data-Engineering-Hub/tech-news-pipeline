@@ -1,47 +1,20 @@
 """
 news_pipeline_flow.py
 ---------------------
-Prefect flow that orchestrates the full tech-news ETL pipeline:
+Prefect flow qui orchestre le pipeline ETL tech-news :
 
     Extract  →  fetch latest articles from the Hacker News RSS feed
     Load     →  write raw articles to a Snowflake staging table
     Transform→  run a SQL view / query inside Snowflake to produce the
                 clean analytics layer
-
-Run locally:
-    python flows/news_pipeline_flow.py
 """
 
 import pandas as pd
-from dotenv import load_dotenv
 from prefect import flow, get_run_logger, task
 
-load_dotenv()  # charge .env dans os.environ (sans écraser les vraies vars d'env)
-
+from config import CLEAN_VIEW, RAW_TABLE, TRANSFORM_SQL
 from db.snowflake_connector import get_snowflake_connection, load_dataframe_to_snowflake
 from ingestion.fetch_news import fetch_news_as_dataframe
-
-# ---------------------------------------------------------------------------
-# Configuration – adjust as needed or drive via Prefect variables / env vars
-# ---------------------------------------------------------------------------
-RAW_TABLE = "RAW_TECH_NEWS"
-CLEAN_VIEW = "CLEAN_TECH_NEWS"
-
-TRANSFORM_SQL = f"""
-CREATE OR REPLACE VIEW {CLEAN_VIEW} AS
-SELECT
-    TITLE,
-    LINK,
-    -- Strip leading/trailing whitespace from description
-    TRIM(DESCRIPTION)          AS DESCRIPTION,
-    -- Parse the RFC-2822 pub_date into a proper TIMESTAMP
-    TRY_TO_TIMESTAMP_NTZ(PUB_DATE, 'DY, DD MON YYYY HH24:MI:SS TZH') AS PUBLISHED_AT,
-    SOURCE,
-    CURRENT_TIMESTAMP()        AS LOADED_AT
-FROM {RAW_TABLE}
-WHERE TITLE IS NOT NULL
-  AND LINK  IS NOT NULL;
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -98,11 +71,3 @@ def tech_news_pipeline(feed_url: str | None = None, overwrite: bool = True) -> N
     df = extract(feed_url=feed_url)
     load(df, overwrite=overwrite)
     transform()
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    tech_news_pipeline()

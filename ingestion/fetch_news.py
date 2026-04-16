@@ -66,10 +66,3 @@ def fetch_news_as_dataframe(url: str | None = None) -> pd.DataFrame:
         )
 
     return pd.DataFrame(rows, columns=["TITLE", "LINK", "DESCRIPTION", "PUB_DATE", "SOURCE"])
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    df = fetch_news_as_dataframe()
-    print(f"Fetched {len(df)} articles.\n")
-    print(df.head().to_string(index=False))
