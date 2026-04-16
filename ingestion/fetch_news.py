@@ -2,85 +2,67 @@
 fetch_news.py
 -------------
 Fetches the latest tech news articles from the Hacker News public RSS feed
-and returns them as a list of dictionaries ready for downstream processing.
+using feedparser and returns them as a pandas DataFrame ready for downstream
+processing and loading into Snowflake.
 """
 
-import xml.etree.ElementTree as ET
+import logging
 
+import feedparser
 import pandas as pd
-import requests
 
-RSS_FEED_URL = "https://hnrss.org/frontpage"
+logger = logging.getLogger(__name__)
 
-
-def fetch_rss_feed(url: str = RSS_FEED_URL, timeout: int = 30) -> str:
-    """Fetch the raw RSS/XML content from *url*.
-
-    Args:
-        url: The RSS feed URL to request.
-        timeout: Request timeout in seconds.
-
-    Returns:
-        Raw XML string response body.
-
-    Raises:
-        requests.HTTPError: If the server returns a 4xx/5xx status code.
-    """
-    response = requests.get(url, timeout=timeout)
-    response.raise_for_status()
-    return response.text
+DEFAULT_FEED_URL = "https://hnrss.org/frontpage"
+_HN_ITEM_URL = "https://news.ycombinator.com/item?id={}"
 
 
-def _element_text(element: ET.Element | None) -> str | None:
-    """Return stripped text content of *element*, or ``None`` if absent."""
-    if element is None or not element.text:
-        return None
-    return element.text.strip()
-
-
-def parse_rss(xml_text: str) -> list[dict]:
-    """Parse an RSS XML string into a list of article dictionaries.
+def fetch_news_as_dataframe(url: str | None = None) -> pd.DataFrame:
+    """Fetch the RSS feed at *url* and return articles as a pandas DataFrame.
 
     Args:
-        xml_text: Raw RSS XML string.
+        url: RSS feed URL to parse. Defaults to the Hacker News front page.
 
     Returns:
-        List of dicts with keys: title, link, description, pub_date, source.
+        DataFrame with columns TITLE, LINK, DESCRIPTION, PUB_DATE, SOURCE.
+        PUB_DATE preserves the original RFC-2822 string from the feed so that
+        Snowflake can parse it with TRY_TO_TIMESTAMP_NTZ.
     """
-    root = ET.fromstring(xml_text)
-    channel = root.find("channel")
-    if channel is None:
-        return []
+    feed_url = url or DEFAULT_FEED_URL
+    logger.info("Fetching RSS feed from %s", feed_url)
 
-    articles = []
-    for item in channel.findall("item"):
-        articles.append(
+    feed = feedparser.parse(feed_url)
+
+    if feed.bozo:
+        logger.warning(
+            "feedparser reported a malformed feed (%s): %s",
+            feed_url,
+            feed.bozo_exception,
+        )
+
+    entries = feed.get("entries", [])
+    logger.info("Parsed %d entries from feed", len(entries))
+
+    rows = []
+    for entry in entries:
+        link = entry.get("link") or ""
+        if not link:
+            entry_id = entry.get("id", "")
+            link = _HN_ITEM_URL.format(entry_id)
+            logger.warning(
+                "Entry '%s' has no <link>; using fallback URL %s",
+                entry.get("title", "<no title>"),
+                link,
+            )
+
+        rows.append(
             {
-                "title": _element_text(item.find("title")),
-                "link": _element_text(item.find("link")),
-                "description": _element_text(item.find("description")),
-                "pub_date": _element_text(item.find("pubDate")),
-                "source": "Hacker News RSS",
+                "TITLE": entry.get("title"),
+                "LINK": link,
+                "DESCRIPTION": entry.get("summary"),
+                "PUB_DATE": entry.get("published"),
+                "SOURCE": "Hacker News RSS",
             }
         )
-    return articles
 
-
-def fetch_news_as_dataframe(url: str = RSS_FEED_URL) -> pd.DataFrame:
-    """End-to-end helper: fetch the RSS feed and return a pandas DataFrame.
-
-    Args:
-        url: The RSS feed URL to request.
-
-    Returns:
-        DataFrame with columns: title, link, description, pub_date, source.
-    """
-    xml_text = fetch_rss_feed(url)
-    articles = parse_rss(xml_text)
-    return pd.DataFrame(articles)
-
-
-if __name__ == "__main__":
-    df = fetch_news_as_dataframe()
-    print(f"Fetched {len(df)} articles.")
-    print(df[["title", "pub_date"]].head(10).to_string(index=False))
+    return pd.DataFrame(rows, columns=["TITLE", "LINK", "DESCRIPTION", "PUB_DATE", "SOURCE"])
